@@ -1,0 +1,6 @@
+= rtypist
+
+TODO: Describe your project here
+
+:include:rtypist.rdoc
+
