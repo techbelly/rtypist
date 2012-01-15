@@ -12,12 +12,34 @@ class Rtypist::Application
 
   def initialize(options = {})
     @options = options
+    @labels = {}
   end
 
   def add_rev str
      Ncurses.attron(Ncurses::A_REVERSE);
      Ncurses.addstr str;
      Ncurses.attroff(Ncurses::A_REVERSE);
+  end
+
+  def command_lines(file)
+    File.open(file).each_with_index do |line,i|
+      l = line.chomp
+      next if l.length == 0 || l[0] == "#" || l[0] == '!'
+      yield l,i 
+    end
+  end
+
+  def labels(file)
+    command_lines(file) do |line,i|
+      yield line,i if line[0] == "G"
+    end
+  end
+
+  def build_label_index(file)
+    labels(file) do |line,i| 
+      label = line.split(":")[1]
+      @labels[label] = i
+    end
   end
 
   def banner(text)
@@ -54,6 +76,8 @@ class Rtypist::Application
                
       Ncurses.raw
       banner("Loading " + File.basename(script_file))
+      build_label_index(script_file)
+      puts @labels.inspect
       Ncurses.getch
     ensure
       Ncurses.curs_set 1
