@@ -5,7 +5,6 @@ module Rtypist
   class Cli
     def self.parse_options(program,args)
       options = OpenStruct.new
-      options.silent = false
 
       opts = OptionParser.new do |opts|
         executable = File.basename(program)
