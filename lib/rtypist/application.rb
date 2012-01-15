@@ -83,12 +83,13 @@ class Rtypist::Application
     title_r = /\s+(?:UP=([^ ]*) )?\"(.*)\"/
     match =title_r.match data
     _,up_label,title = *match
-    label_r = /\s+\"(.*)\"/
-    labels = command_data.split("\n").map {
-      |l| label_r.match(l)[1]
+    label_r = / :([^ ]*)\s+\"(.*)\"/
+    labels = command_data.split("\n").map { |l| 
+      m = label_r.match(l)
+      [m[1],m[2]]
     }
     
-    max_width = labels.map { |l| l.length }.max
+    max_width = labels.map { |l| l[1].length }.max
     columns = Ncurses.COLS / (max_width + 2)
     while (columns > 1 && num_items / columns <= 3)
       columns = columns - 1
@@ -140,13 +141,34 @@ class Rtypist::Application
           else
             Ncurses.wattroff(@screen, Ncurses::A_REVERSE)
           end
-          Ncurses.mvaddstr(start_y+j,(i+1) * spacing + i * max_width, labels[j])
-          Ncurses.addstr(' ' * (max_width - labels[j].length))
+          Ncurses.mvaddstr(start_y+j,(i+1) * spacing + i * max_width, labels[j][1])
+          Ncurses.addstr(' ' * (max_width - labels[j][1].length))
         end
       end
       Ncurses.wattroff(@screen, Ncurses::A_REVERSE)
-    end 
-  
+      ch = Ncurses.getch
+
+      case ch
+      when Ncurses::KEY_UP,'k'.ord,'K'.ord
+        cur_choice = [0, cur_choice -1].max;
+        if (cur_choice < start_idx) 
+          start_idx = start_idx - 1
+          end_idx = end_idx -1
+        end
+      when Ncurses::KEY_DOWN,'j'.ord,'J'.ord
+        cur_choice = [cur_choice +1, num_items -1].min
+        if (cur_choice > end_idx)
+          start_idx = start_idx + 1
+          end_idx = end_idx + 1
+        end
+      when "\n".ord, " ".ord, Ncurses::KEY_ENTER
+        return labels[cur_choice][0] 
+      when Ncurses::KEY_CANCEL,27,'q'.ord, 'Q'.ord
+        return up_label
+      else
+        puts ch
+      end
+    end while true 
   end
 
   def parse_file(file,label = nil)
@@ -163,8 +185,7 @@ class Rtypist::Application
           banner(data);
         when C_MENU
           command_data = buffer_data(file,i)
-          do_menu(data, command_data,i)
-          break
+          return do_menu(data, command_data,i)
         else
           puts "Command #{line} at #{i}"
           break;
@@ -203,7 +224,7 @@ class Rtypist::Application
       Ncurses.typeahead -1
       Ncurses.noecho
       Ncurses.curs_set 0
-               
+      Ncurses.keypad(Ncurses.stdscr,true)         
       Ncurses.raw
       banner("Loading " + File.basename(script_file))
       build_label_index(script_file)
