@@ -4,11 +4,33 @@ class Rtypist::Application
 
   TOP = 0
 
-  C_NORMAL = 1;
-  C_BANNER = 2;
-  C_PROG_NAME = 3;
-  C_PROG_VERSION = 4;
-  C_MENU_TITLE = 5;
+  C_NORMAL = 1
+  C_BANNER = 2
+  C_PROG_NAME = 3
+  C_PROG_VERSION = 4
+  C_MENU_TITLE = 5
+
+  C_COMMENT                 = '#'
+  C_ALT_COMMENT             = '!'
+  C_SEP                     = ':'
+  C_CONT                    = ' '
+  C_LABEL                   = '*'
+  C_TUTORIAL                = 'T'
+  C_INSTRUCTION             = 'I'
+  C_CLEAR                   = 'B'
+  C_GOTO                    = 'G'
+  C_EXIT                    = 'X'
+  C_QUERY                   = 'Q'
+  C_YGOTO                   = 'Y'
+  C_NGOTO                   = 'N'
+  C_DRILL                   = 'D'
+  C_DRILL_PRACTICE_ONLY     = 'd'
+  C_SPEEDTEST               = 'S'
+  C_SPEEDTEST_PRACTICE_ONLY = 's'
+  C_KEYBIND                 = 'K'
+  C_ERROR_MAX_SET           = 'E'
+  C_ON_FAILURE_SET          = 'F'
+  C_MENU                    = 'M'
 
   def initialize(options = {})
     @options = options
@@ -21,17 +43,29 @@ class Rtypist::Application
      Ncurses.attroff(Ncurses::A_REVERSE);
   end
 
-  def command_lines(file)
+  def command_lines(file,start=0)
     File.open(file).each_with_index do |line,i|
+      next if i < start
       l = line.chomp
-      next if l.length == 0 || l[0] == "#" || l[0] == '!'
+      next if l.length == 0 || l[0] == C_COMMENT || l[0] == C_ALT_COMMENT
       yield l,i 
     end
   end
 
+  def buffer_data(file,command_start)
+    data_start = command_start +1
+    data = []
+    File.open(file).each_with_index do |line, i|
+      next if i < data_start
+      break if line[0] != C_CONT
+      data << line
+    end
+    return data.join
+  end
+
   def labels(file)
     command_lines(file) do |line,i|
-      yield line,i if line[0] == "G"
+      yield line,i if line[0] == C_LABEL 
     end
   end
 
@@ -39,6 +73,102 @@ class Rtypist::Application
     labels(file) do |line,i| 
       label = line.split(":")[1]
       @labels[label] = i
+    end
+  end
+
+  def do_menu(data,command_data,i)
+    num_lines = command_data.split("\n").count
+    num_items = num_lines - 1;
+    menu_height_max = Ncurses.LINES - 6;
+    title_r = /\s+(?:UP=([^ ]*) )?\"(.*)\"/
+    match =title_r.match data
+    _,up_label,title = *match
+    label_r = /\s+\"(.*)\"/
+    labels = command_data.split("\n").map {
+      |l| label_r.match(l)[1]
+    }
+    
+    max_width = labels.map { |l| l.length }.max
+    columns = Ncurses.COLS / (max_width + 2)
+    while (columns > 1 && num_items / columns <= 3)
+      columns = columns - 1
+    end
+
+    items_first_column = num_items/columns;
+    if (num_items % columns != 0)
+      items_first_column = items_first_column + 1
+    end
+
+    if (items_first_column > menu_height_max)
+      start_y = 4
+    else
+      start_y = (Ncurses.LINES - items_first_column) / 2
+    end
+
+    spacing = (Ncurses.COLS - columns * max_width) / (columns + 1)
+
+    items_per_page = [num_items, columns * [menu_height_max,items_first_column].min].min
+    
+    real_items_per_column = items_per_page / columns
+    if (items_per_page % columns != 0)
+      real_items_per_column = real_items_per_column + 1
+    end
+
+    start_idx = 0
+    end_idx = items_per_page - 1
+
+    Ncurses.move(1,0)
+    Ncurses.clrtobot
+
+    Ncurses.wattron(@screen, Ncurses::A_BOLD)
+    Ncurses.attron(Ncurses.COLOR_PAIR(C_MENU_TITLE));
+    Ncurses.mvaddstr(2,(80 - title.length)/ 2, title)
+    Ncurses.attron(Ncurses.COLOR_PAIR(C_NORMAL));
+    Ncurses.wattroff(@screen, Ncurses::A_BOLD)
+
+    Ncurses.mvaddstr(Ncurses.LINES - 1, 0, "Use arrowed keys to move around, SPACE or RETURN to select and ESCAPE to go back")
+    
+    ch = nil
+    cur_choice = 0
+    begin
+      columns.times do |i|
+        real_items_per_column.times do |j|
+          idx = i * real_items_per_column + j + start_idx
+          break if idx > end_idx
+          if (idx == cur_choice)
+            Ncurses.wattron(@screen, Ncurses::A_REVERSE)
+          else
+            Ncurses.wattroff(@screen, Ncurses::A_REVERSE)
+          end
+          Ncurses.mvaddstr(start_y+j,(i+1) * spacing + i * max_width, labels[j])
+          Ncurses.addstr(' ' * (max_width - labels[j].length))
+        end
+      end
+      Ncurses.wattroff(@screen, Ncurses::A_REVERSE)
+    end 
+  
+  end
+
+  def parse_file(file,label = nil)
+    line_no = label ? @labels.fetch(label,0) : 0;
+    command_lines(file,line_no) do |line,i|
+      command,data = line.split(":")
+      case command
+        when C_GOTO
+          return data
+        when C_LABEL
+          @last_label = data
+        when C_CLEAR
+          Ncurses.move(TOP,0); Ncurses.clrtobot
+          banner(data);
+        when C_MENU
+          command_data = buffer_data(file,i)
+          do_menu(data, command_data,i)
+          break
+        else
+          puts "Command #{line} at #{i}"
+          break;
+      end
     end
   end
 
@@ -66,7 +196,7 @@ class Rtypist::Application
   end
 
   def start
-    Ncurses.initscr
+    @screen = Ncurses.initscr
     begin
       Ncurses.clear
       Ncurses.refresh
@@ -77,7 +207,10 @@ class Rtypist::Application
       Ncurses.raw
       banner("Loading " + File.basename(script_file))
       build_label_index(script_file)
-      puts @labels.inspect
+      label = nil
+      begin
+        label = parse_file(script_file,label)
+      end while label
       Ncurses.getch
     ensure
       Ncurses.curs_set 1
