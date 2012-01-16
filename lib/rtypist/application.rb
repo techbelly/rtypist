@@ -171,6 +171,78 @@ class Rtypist::Application
     end while true 
   end
 
+  def do_tutorial(data,command_data,line_num)
+    lines = command_data.split("\n")
+    line_no = 1
+    Ncurses.move(line_no,0); Ncurses.clrtobot
+    lines.each_with_index do |l,i|
+      Ncurses.move(line_no+i,0)
+      Ncurses.addstr(l[2..-1])
+    end
+    Ncurses.getch
+  end
+
+  def do_instruction(data,command_data,i)
+    line2 = command_data.split('\n')[0]
+    Ncurses.move(1,0); Ncurses.clrtobot
+    Ncurses.addstr(data)
+    if line2
+      Ncurses.move(2,0)
+      Ncurses.addstr(line2[2..-1])
+    end
+  end
+
+  def getch_fl(int cursor_char)
+    y,x = Ncurses.getcury(@screen), Ncurses.getcurx(@screen)
+    if (cursor_char = 0)
+      Ncurses.curs_set 0
+      Ncurses.refresh
+      Ncurses.move(Ncurses.LINES -1, Ncurses.COLS -1)
+      Ncurses.cbreak
+      rc = Ncurses.getch
+      Ncurses.move(y,x)
+    else
+      Ncurses.curs_set 1
+      Ncurses.refresh
+      Ncurses.cbreak
+      rc = Ncurses.getch
+      Ncurses.curs_set 0
+      Ncurses.refresh
+    end
+    return rc
+  end
+
+  def do_drill(data, command_data,i)
+    drill_data = [data]+command_data
+    if (@last_command == C_TUTORIAL)
+      Ncurses.move(1,0); Ncurses.clrtobot
+    end
+    while (true)
+      linenum = 4
+      Ncurses.move(linenum,0); Ncurses.clrtobot
+      drill_data.each do |line|
+        Ncurses.addstr(line)
+        linenum += 2
+        Ncurses.move(linenum,0)
+      end
+      Ncurses.move(Ncurses.LINES - 1 , Ncurses.COLS - "Drill".length - 2)
+      add_rev("Drill")
+      linenum = 4+1
+      do
+        rc = getch_fl(" ".ord)
+      while (rc == Ncurses::KEY_BACKSPACE || rc == 8)
+      start_time = Time.new if (chars_typed == 0)
+      chars_typed = chars_typed +1
+      error_sync  = error_sync -1
+
+      i 
+      
+
+
+      break;
+    end
+  end
+
   def parse_file(file,label = nil)
     line_no = label ? @labels.fetch(label,0) : 0;
     command_lines(file,line_no) do |line,i|
@@ -186,9 +258,23 @@ class Rtypist::Application
         when C_MENU
           command_data = buffer_data(file,i)
           return do_menu(data, command_data,i)
+        when C_TUTORIAL
+          command_data = buffer_data(file,i)
+          do_tutorial(data,command_data,i)
+        when C_INSTRUCTION
+          command_data = buffer_data(file,i)
+          do_instruction(data,command_data,i)
+        when C_DRILL
+          command_data = buffer_data(file,i).split("\n").map {|s| s[2..-1] }
+          do_drill(data,command_data,i)
+        when C_CONT
+          
         else
           puts "Command #{line} at #{i}"
           break;
+      end
+      unless [C_CONT,C_LABEL,C_CLEAR].include? command
+         @last_command = command
       end
     end
   end
