@@ -1,6 +1,7 @@
 = rtypist
 
-TODO: Describe your project here
+Line-by-line port of gnu-typist to ruby. Not at all ruby-ish, and a bit of a
+mess. Also, not working yet.
 
 :include:rtypist.rdoc
 
