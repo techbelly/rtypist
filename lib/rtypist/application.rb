@@ -192,12 +192,12 @@ class Rtypist::Application
     end
   end
 
-  def getch_fl(int cursor_char)
+  def getch_fl(cursor_char)
     y,x = Ncurses.getcury(@screen), Ncurses.getcurx(@screen)
-    if (cursor_char = 0)
+    if (cursor_char == 0)
       Ncurses.curs_set 0
       Ncurses.refresh
-      Ncurses.move(Ncurses.LINES -1, Ncurses.COLS -1)
+      Ncurses.move(Ncurses.LINES - 1, Ncurses.COLS - 1)
       Ncurses.cbreak
       rc = Ncurses.getch
       Ncurses.move(y,x)
@@ -212,11 +212,40 @@ class Rtypist::Application
     return rc
   end
 
+  def do_query_repeat
+    Ncurses.move(Ncurses.LINES - 1, 0)
+    Ncurses.clrtoeol
+    Ncurses.move(Ncurses.LINES - 1, Ncurses.COLS - "Query".length - 2)
+    add_rev("Query")
+    Ncurses.move(Ncurses.LINES - 1, 0)
+    add_rev(" Press R to repeat, N for next exercise or E to exit")
+    while (true)
+      ch = getch_fl(0).chr
+      case ch
+        when 'R','r'
+          break
+        when 'N','n'
+          break
+        when 'E','e'
+          break
+      end
+      Ncurses.move(Ncurses.LINES - 1, 0); Ncurses.clrtoeol
+      Ncurses.move(Ncurses.LINES - 1, Ncurses.COLS - "Query".length - 2)
+      add_rev("Query")
+      Ncurses.move(Ncurses.LINES - 1, 0)
+      add_rev(" Press R to repeat, N for next exercise or E to exit")
+    end
+    Ncurses.move(Ncurses.LINES - 1, 0); Ncurses.clrtoeol
+    return ch
+  end
+
   def do_drill(data, command_data,i)
     drill_data = [data]+command_data
     if (@last_command == C_TUTORIAL)
       Ncurses.move(1,0); Ncurses.clrtobot
     end
+    all_data = drill_data.join("\n")
+    pos = 0
     while (true)
       linenum = 4
       Ncurses.move(linenum,0); Ncurses.clrtobot
@@ -228,18 +257,57 @@ class Rtypist::Application
       Ncurses.move(Ncurses.LINES - 1 , Ncurses.COLS - "Drill".length - 2)
       add_rev("Drill")
       linenum = 4+1
-      do
-        rc = getch_fl(" ".ord)
-      while (rc == Ncurses::KEY_BACKSPACE || rc == 8)
-      start_time = Time.new if (chars_typed == 0)
-      chars_typed = chars_typed +1
-      error_sync  = error_sync -1
+     
+      Ncurses.move(linenum,0)
 
-      i 
-      
+      start_time = nil
+      chars_typed = 0
+      errors = 0
+      error_sync = 0
+      chars_typed_in_line = 0
+      for position in 0...all_data.length
+        
+        begin
+          rc = getch_fl(" ".ord)
+        end while (rc == Ncurses::KEY_BACKSPACE)
 
+        if (chars_typed == 0)
+          start_time = Time.new
+        end
+        chars_typed += 1
+        error_sync -= 1
 
-      break;
+        break if rc == 27 
+
+        if rc == all_data[position].ord
+          Ncurses.addch(rc)
+          chars_typed_in_line += 1
+        else
+          if error_sync >= 0 && rc == all_data[position-1].ord
+            position -= 1
+            next
+          elsif chars_typed_in_line < Ncurses.COLS
+            add_rev(' ')
+            chars_typed_in_line += 1
+          end
+          errors += 1
+          error_sync = 1
+          if rc == all_data[position+1]
+            Ncurses.ungetch(rc)
+            error_sync += 1
+          end
+        end
+        if (all_data[position] == "\n".ord)
+          linenum += 2;
+          Ncurses.move linenum, 0
+          chars_typed_in_line = 0
+        end
+       end
+      if (rc == 27) 
+        next unless chars_typed == 1
+      end
+      rc = do_query_repeat
+      break if rc == 'E' or rc == 'N'
     end
   end
 
@@ -284,10 +352,9 @@ class Rtypist::Application
     brand = " rtypist #{Rtypist::VERSION} "
     cols = Ncurses.COLS
     brand_pos = cols - brand.length
-    text_pos = ((cols-brand.length) > text.length) ?
-      (cols - brand.length - text.length) / 2 : 0;
-    Ncurses.move(TOP, 0);
-    Ncurses.attron(Ncurses.COLOR_PAIR(C_BANNER));    
+    text_pos = ((cols-brand.length) > text.length) ? (cols - brand.length - text.length) / 2 : 0
+    Ncurses.move(TOP, 0)
+    Ncurses.attron(Ncurses.COLOR_PAIR(C_BANNER))    
     cols.times {  add_rev ' ' }
     Ncurses.move(TOP, text_pos);
     add_rev(text)
