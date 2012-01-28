@@ -265,8 +265,8 @@ class Rtypist::Application
       errors = 0
       error_sync = 0
       chars_typed_in_line = 0
-      for position in 0...all_data.length
-        
+      position = 0
+      while position < all_data.length
         begin
           rc = getch_fl(" ".ord)
         end while (rc == Ncurses::KEY_BACKSPACE)
@@ -274,6 +274,7 @@ class Rtypist::Application
         if (chars_typed == 0)
           start_time = Time.new
         end
+
         chars_typed += 1
         error_sync -= 1
 
@@ -284,10 +285,9 @@ class Rtypist::Application
           chars_typed_in_line += 1
         else
           if error_sync >= 0 && rc == all_data[position-1].ord
-            position -= 1
             next
           elsif chars_typed_in_line < Ncurses.COLS
-            add_rev(' ')
+            add_rev('^')
             chars_typed_in_line += 1
           end
           errors += 1
@@ -302,12 +302,13 @@ class Rtypist::Application
           Ncurses.move linenum, 0
           chars_typed_in_line = 0
         end
-       end
+        position = position + 1
+      end
       if (rc == 27) 
         next unless chars_typed == 1
       end
       rc = do_query_repeat
-      break if rc == 'E' or rc == 'N'
+      break if rc == 'E' or rc == 'e' or rc == 'N' or rc == 'n'
     end
   end
 
