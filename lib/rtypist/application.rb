@@ -32,6 +32,8 @@ class Rtypist::Application
   C_ON_FAILURE_SET          = 'F'
   C_MENU                    = 'M'
 
+  C_ESC_KEY = 27
+
   def initialize(options = {})
     @options = options
     @labels = {}
@@ -163,7 +165,7 @@ class Rtypist::Application
         end
       when "\n".ord, " ".ord, Ncurses::KEY_ENTER
         return labels[cur_choice][0] 
-      when Ncurses::KEY_CANCEL,27,'q'.ord, 'Q'.ord
+      when Ncurses::KEY_CANCEL,C_ESC_KEY,'q'.ord, 'Q'.ord
         return up_label
       else
         puts ch
@@ -278,7 +280,7 @@ class Rtypist::Application
         chars_typed += 1
         error_sync -= 1
 
-        break if rc == 27 
+        break if rc == C_ESC_KEY 
 
         if rc == all_data[position].ord
           Ncurses.addch(rc)
@@ -304,7 +306,7 @@ class Rtypist::Application
         end
         position = position + 1
       end
-      if (rc == 27) 
+      if (rc == C_ESC_KEY) 
         next unless chars_typed == 1
       end
       rc = do_query_repeat
