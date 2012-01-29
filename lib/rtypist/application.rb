@@ -209,10 +209,10 @@ class Rtypist::Application
     all_data = drill_data.join("\n")
     pos = 0
     first_line_line = 4
-    while (true)
-      linenum = first_line_line
-      screen.clear_from_line(linenum)
-      screen.add_lines(drill_data,linenum,2)
+    
+    while (true)      
+      screen.clear_from_line(first_line_line)
+      screen.add_lines(drill_data,first_line_line,2)
       screen.add_mode("Drill")
       
       linenum = first_line_line+1
@@ -224,6 +224,7 @@ class Rtypist::Application
       error_sync = 0
       chars_typed_in_line = 0
       position = 0
+      
       while position < all_data.length
         begin
           rc = screen.getch_fl(" ".ord)
@@ -237,20 +238,27 @@ class Rtypist::Application
         error_sync  -= 1
 
         break if rc == C_ESC_KEY 
-
-        if rc == all_data[position].ord
+        
+        previous_character = all_data[position-1]
+        current_character  = all_data[position]
+        next_character     = all_data[position+1]
+        
+        if rc.chr == current_character
           screen.addch(rc)
           chars_typed_in_line += 1
         else
-          if error_sync >= 0 && rc == all_data[position-1].ord
+          
+          if error_sync >= 0 && position > 0 && rc.chr == previous_character
             next
           elsif chars_typed_in_line < screen.cols
             screen.add_rev('^')
             chars_typed_in_line += 1
           end
+          
           errors += 1
           error_sync = 1
-          if rc == all_data[position+1]
+          
+          if position < all_data.length && rc.chr == next_character
             screen.ungetch(rc)
             error_sync += 1
           end

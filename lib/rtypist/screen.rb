@@ -1,3 +1,5 @@
+require 'ncursesw'
+
 module Rtypist
 class Screen
   
@@ -80,11 +82,11 @@ class Screen
    end
   
    def add_mode(text)
-     Ncurses.move(Ncurses.LINES - 1, 0)
+     Ncurses.move(lines - 1, 0)
      Ncurses.clrtoeol
-     Ncurses.move(Ncurses.LINES - 1, Ncurses.COLS - text.length - 2)
+     Ncurses.move(lines - 1, cols - text.length - 2)
      add_rev(" #{text} ")
-    end
+   end
   
    def getch_fl(cursor_char)
      y,x = Ncurses.getcury(@ncurses), Ncurses.getcurx(@ncurses)
