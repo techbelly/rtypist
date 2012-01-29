@@ -1,7 +1,13 @@
 = rtypist
 
-Line-by-line port of gnu-typist to ruby. Not at all ruby-ish, and a bit of a
-mess. Also, not working yet.
+A weekend project, a bit of an experiment really, doing an almost line-by-line port of [Gnu Typist]:http://www.gnu.org/software/gtypist/ to ruby.
+
+It sort of works, though not everything is implemented, but you can install and run it with
+
+    gem install rtypist
+    rtypist
+
+Don't look at the source code! It really is a near line-by-line port - so much less ruby-like than code that would have been written from scratch. One of the reasons I'm doing it is to practice refactoring.
 
 :include:rtypist.rdoc
 
