@@ -1,14 +1,8 @@
 require 'ncursesw'
+require 'rtypist/screen'
 
 class Rtypist::Application
 
-  TOP = 0
-
-  C_NORMAL = 1
-  C_BANNER = 2
-  C_PROG_NAME = 3
-  C_PROG_VERSION = 4
-  C_MENU_TITLE = 5
 
   C_COMMENT                 = '#'
   C_ALT_COMMENT             = '!'
@@ -37,12 +31,6 @@ class Rtypist::Application
   def initialize(options = {})
     @options = options
     @labels = {}
-  end
-
-  def add_rev str
-     Ncurses.attron(Ncurses::A_REVERSE);
-     Ncurses.addstr str;
-     Ncurses.attroff(Ncurses::A_REVERSE);
   end
 
   def command_lines(file,start=0)
@@ -78,31 +66,27 @@ class Rtypist::Application
     end
   end
 
-  def display_speed(total_chars,elapsed_time,error_count)
+  def display_speed(screen,total_chars,elapsed_time,error_count)
     test_time  = elapsed_time / 60.0
     if (elapsed_time > 0)
       cpm = total_chars / test_time
       adjusted_cpm = (total_chars - (error_count * 5)) / test_time
     end
-    line = Ncurses.LINES - 5
-    message = " Raw speed      = %6.2f wpm " % (cpm / 5.0)
-    Ncurses.move(line,Ncurses.COLS - message.length - 1)
-    add_rev(message)
-    line += 1
-    message = " Adjusted speed = %6.2f wpm " % (adjusted_cpm / 5.0)
-    Ncurses.move(line,Ncurses.COLS - message.length - 1)
-    add_rev(message)
-    line += 1
-    message = "            with %.1f%% errors " % ( 100.0 * error_count / total_chars.to_f)
-    Ncurses.move(line,Ncurses.COLS - message.length - 1)
-    add_rev(message)
-    line += 1
+    
+    messages = [
+      "Raw speed      = %6.2f wpm" % (cpm / 5.0),
+      "Adjusted speed = %6.2f wpm" % (adjusted_cpm / 5.0),
+      "with %.1f%% errors" % ( 100.0 * error_count / total_chars.to_f)
+    ]
+    
+    screen.results_box(messages)
   end
 
-  def do_menu(data,command_data,i)
+  def do_menu(screen,data,command_data,i)
     num_lines = command_data.split("\n").count
     num_items = num_lines - 1;
-    menu_height_max = Ncurses.LINES - 6;
+    
+    menu_height_max = screen.lines - 6;
     title_r = /\s+(?:UP=([^ ]*) )?\"(.*)\"/
     match =title_r.match data
     _,up_label,title = *match
@@ -113,7 +97,7 @@ class Rtypist::Application
     }
     
     max_width = labels.map { |l| l[1].length }.max
-    columns = Ncurses.COLS / (max_width + 2)
+    columns = screen.cols / (max_width + 2)
     while (columns > 1 && num_items / columns <= 3)
       columns = columns - 1
     end
@@ -126,10 +110,10 @@ class Rtypist::Application
     if (items_first_column > menu_height_max)
       start_y = 4
     else
-      start_y = (Ncurses.LINES - items_first_column) / 2
+      start_y = (screen.lines - items_first_column) / 2
     end
 
-    spacing = (Ncurses.COLS - columns * max_width) / (columns + 1)
+    spacing = (screen.cols - columns * max_width) / (columns + 1)
 
     items_per_page = [num_items, columns * [menu_height_max,items_first_column].min].min
     
@@ -141,16 +125,9 @@ class Rtypist::Application
     start_idx = 0
     end_idx = items_per_page - 1
 
-    Ncurses.move(1,0)
-    Ncurses.clrtobot
-
-    Ncurses.wattron(@screen, Ncurses::A_BOLD)
-    Ncurses.attron(Ncurses.COLOR_PAIR(C_MENU_TITLE));
-    Ncurses.mvaddstr(2,(80 - title.length)/ 2, title)
-    Ncurses.attron(Ncurses.COLOR_PAIR(C_NORMAL));
-    Ncurses.wattroff(@screen, Ncurses::A_BOLD)
-
-    Ncurses.mvaddstr(Ncurses.LINES - 1, 0, "Use arrowed keys to move around, SPACE or RETURN to select and ESCAPE to go back")
+    screen.clear_from_line(1)
+    screen.add_title(title)
+    screen.bottom_line("Use arrowed keys to move around, SPACE or RETURN to select and ESCAPE to go back")
     
     ch = nil
     cur_choice = 0
@@ -159,17 +136,15 @@ class Rtypist::Application
         real_items_per_column.times do |j|
           idx = i * real_items_per_column + j + start_idx
           break if idx > end_idx
-          if (idx == cur_choice)
-            Ncurses.wattron(@screen, Ncurses::A_REVERSE)
-          else
-            Ncurses.wattroff(@screen, Ncurses::A_REVERSE)
-          end
-          Ncurses.mvaddstr(start_y+j,(i+1) * spacing + i * max_width, labels[j][1])
-          Ncurses.addstr(' ' * (max_width - labels[j][1].length))
+          
+          text_start_y = start_y + j
+          text_start_x = (i+1) * spacing + i * max_width
+          text = labels[j][1]
+          
+          screen.write_at(max_width, text_start_y,text_start_x,text,(idx == cur_choice))
         end
       end
-      Ncurses.wattroff(@screen, Ncurses::A_REVERSE)
-      ch = Ncurses.getch
+      ch = screen.getch
 
       case ch
       when Ncurses::KEY_UP,'k'.ord,'K'.ord
@@ -194,56 +169,36 @@ class Rtypist::Application
     end while true 
   end
 
-  def do_tutorial(data,command_data,line_num)
-    lines = command_data.split("\n")
-    line_no = 1
-    Ncurses.move(line_no,0); Ncurses.clrtobot
+  def add_lines(screen,lines,start_line)
+    line = start_line
+    screen.clear_from_line(start_line)
     lines.each_with_index do |l,i|
-      Ncurses.move(line_no+i,0)
-      Ncurses.addstr(l[2..-1])
+      screen.addstrat(line+i,0,l)
     end
-    Ncurses.getch
   end
 
-  def do_instruction(data,command_data,i)
+  def do_tutorial(screen,data,command_data,line_num)
+    lines = command_data.split("\n").map {|l| l[2..-1]}
+    add_lines(screen,lines,1)
+    screen.getch
+  end
+
+  def do_instruction(screen,data,command_data,i)
     line2 = command_data.split('\n')[0]
-    Ncurses.move(1,0); Ncurses.clrtobot
-    Ncurses.addstr(data)
-    if line2
-      Ncurses.move(2,0)
-      Ncurses.addstr(line2[2..-1])
-    end
+    lines = [data]
+    lines = lines + line2[2..-1] if line2
+    add_lines(screen,lines,1)
   end
 
-  def getch_fl(cursor_char)
-    y,x = Ncurses.getcury(@screen), Ncurses.getcurx(@screen)
-    if (cursor_char == 0)
-      Ncurses.curs_set 0
-      Ncurses.refresh
-      Ncurses.move(Ncurses.LINES - 1, Ncurses.COLS - 1)
-      Ncurses.cbreak
-      rc = Ncurses.getch
-      Ncurses.move(y,x)
-    else
-      Ncurses.curs_set 1
-      Ncurses.refresh
-      Ncurses.cbreak
-      rc = Ncurses.getch
-      Ncurses.curs_set 0
-      Ncurses.refresh
-    end
-    return rc
-  end
-
-  def do_query_repeat
+  def do_query_repeat(screen)
     Ncurses.move(Ncurses.LINES - 1, 0)
     Ncurses.clrtoeol
     Ncurses.move(Ncurses.LINES - 1, Ncurses.COLS - "Query".length - 2)
-    add_rev("Query")
+    screen.add_rev("Query")
     Ncurses.move(Ncurses.LINES - 1, 0)
-    add_rev(" Press R to repeat, N for next exercise or E to exit")
+    screen.add_rev(" Press R to repeat, N for next exercise or E to exit")
     while (true)
-      ch = getch_fl(0).chr
+      ch = screen.getch_fl(0).chr
       case ch
         when 'R','r'
           break
@@ -254,15 +209,15 @@ class Rtypist::Application
       end
       Ncurses.move(Ncurses.LINES - 1, 0); Ncurses.clrtoeol
       Ncurses.move(Ncurses.LINES - 1, Ncurses.COLS - "Query".length - 2)
-      add_rev("Query")
+      screen.add_rev("Query")
       Ncurses.move(Ncurses.LINES - 1, 0)
-      add_rev(" Press R to repeat, N for next exercise or E to exit")
+      screen.add_rev(" Press R to repeat, N for next exercise or E to exit")
     end
     Ncurses.move(Ncurses.LINES - 1, 0); Ncurses.clrtoeol
     return ch
   end
 
-  def do_drill(data, command_data,i)
+  def do_drill(screen, data, command_data,i)
     drill_data = [data]+command_data
     if (@last_command == C_TUTORIAL)
       Ncurses.move(1,0); Ncurses.clrtobot
@@ -278,7 +233,7 @@ class Rtypist::Application
         Ncurses.move(linenum,0)
       end
       Ncurses.move(Ncurses.LINES - 1 , Ncurses.COLS - "Drill".length - 2)
-      add_rev("Drill")
+      screen.add_rev("Drill")
       linenum = 4+1
      
       Ncurses.move(linenum,0)
@@ -291,7 +246,7 @@ class Rtypist::Application
       position = 0
       while position < all_data.length
         begin
-          rc = getch_fl(" ".ord)
+          rc = screen.getch_fl(" ".ord)
         end while (rc == Ncurses::KEY_BACKSPACE)
 
         if (chars_typed == 0)
@@ -310,7 +265,7 @@ class Rtypist::Application
           if error_sync >= 0 && rc == all_data[position-1].ord
             next
           elsif chars_typed_in_line < Ncurses.COLS
-            add_rev('^')
+            screen.add_rev('^')
             chars_typed_in_line += 1
           end
           errors += 1
@@ -332,14 +287,14 @@ class Rtypist::Application
       end
       if (rc != C_ESC_KEY)
         end_time = Time.new
-        display_speed(chars_typed, end_time - start_time, errors)
+        display_speed(screen, chars_typed, end_time - start_time, errors)
       end
-      rc = do_query_repeat
+      rc = do_query_repeat(screen)
       break if rc == 'E' or rc == 'e' or rc == 'N' or rc == 'n'
     end
   end
 
-  def parse_file(file,label = nil)
+  def parse_file(screen,file,label = nil)
     line_no = label ? @labels.fetch(label,0) : 0;
     command_lines(file,line_no) do |line,i|
       command,data = line.split(":")
@@ -349,23 +304,23 @@ class Rtypist::Application
         when C_LABEL
           @last_label = data
         when C_CLEAR
-          Ncurses.move(TOP,0); Ncurses.clrtobot
-          banner(data);
+          screen.clear_from_line(0)
+          screen.banner(data);
         when C_MENU
           command_data = buffer_data(file,i)
-          return do_menu(data, command_data,i)
+          return do_menu(screen,data, command_data,i)
         when C_TUTORIAL
           command_data = buffer_data(file,i)
-          do_tutorial(data,command_data,i)
+          do_tutorial(screen,data,command_data,i)
         when C_INSTRUCTION
           command_data = buffer_data(file,i)
-          do_instruction(data,command_data,i)
+          do_instruction(screen,data,command_data,i)
         when C_DRILL
           command_data = buffer_data(file,i).split("\n").map {|s| s[2..-1] }
-          do_drill(data,command_data,i)
+          do_drill(screen,data,command_data,i)
          when C_SPEEDTEST
           command_data = buffer_data(file,i).split("\n").map {|s| s[2..-1] }
-          do_drill(data,command_data,i)
+          do_drill(screen,data,command_data,i)
         when C_CONT
           
         else
@@ -378,48 +333,18 @@ class Rtypist::Application
     end
   end
 
-  def banner(text)
-    text = text.strip
-    brand = " rtypist #{Rtypist::VERSION} "
-    cols = Ncurses.COLS
-    brand_pos = cols - brand.length
-    text_pos = ((cols-brand.length) > text.length) ? (cols - brand.length - text.length) / 2 : 0
-    Ncurses.move(TOP, 0)
-    Ncurses.attron(Ncurses.COLOR_PAIR(C_BANNER))    
-    cols.times {  add_rev ' ' }
-    Ncurses.move(TOP, text_pos);
-    add_rev(text)
-    Ncurses.move(TOP, brand_pos)
-    Ncurses.attron(Ncurses.COLOR_PAIR(C_PROG_NAME));
-    add_rev(brand);
-    Ncurses.refresh();
-    Ncurses.attron(Ncurses.COLOR_PAIR(C_NORMAL));
-  end
-
   def script_file
     return File.expand_path(File.dirname(__FILE__)+"/../../lessons/gtypist.typ")
   end
 
   def start
-    @screen = Ncurses.initscr
-    begin
-      Ncurses.clear
-      Ncurses.refresh
-      Ncurses.typeahead -1
-      Ncurses.noecho
-      Ncurses.curs_set 0
-      Ncurses.keypad(Ncurses.stdscr,true)         
-      Ncurses.raw
-      banner("Loading " + File.basename(script_file))
+    Rtypist::Screen.new.with_screen do |screen|
+      screen.banner("Loading " + File.basename(script_file))
       build_label_index(script_file)
       label = nil
       begin
-        label = parse_file(script_file,label)
+        label = parse_file(screen,script_file,label)
       end while label
-      Ncurses.getch
-    ensure
-      Ncurses.curs_set 1
-      Ncurses.endwin
     end
   end
 end
