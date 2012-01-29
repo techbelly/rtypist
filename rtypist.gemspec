@@ -7,13 +7,13 @@ spec = Gem::Specification.new do |s|
   s.homepage = 'http://techbelly.com'
   s.platform = Gem::Platform::RUBY
 #TODO: Project needs a summary
-  s.summary = ''
+  s.summary = 'Port of gnu typist to ruby. Probably ill-advised.'
   s.files = %w(
 bin/rtypist
   )
   s.require_paths << 'lib'
-  s.has_rdoc = true
-  s.extra_rdoc_files = ['README.rdoc','rtypist.rdoc']
+  s.has_rdoc = false
+  s.extra_rdoc_files = ['README.rdoc']
   s.rdoc_options << '--title' << 'rtypist' << '--main' << 'README.rdoc' << '-ri'
   s.bindir = 'bin'
   s.executables << 'rtypist'

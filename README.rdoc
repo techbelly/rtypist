@@ -9,5 +9,3 @@ It sort of works, though not everything is implemented, but you can install and 
 
 Don't look at the source code! It really is a near line-by-line port - so much less ruby-like than code that would have been written from scratch. One of the reasons I'm doing it is to practice refactoring.
 
-:include:rtypist.rdoc
-
