@@ -8,8 +8,7 @@ class Screen
   C_MENU_TITLE = 5
 
   TOP = 0
-  
-  
+   
   def initialize
      @ncurses = Ncurses.initscr
   end
@@ -31,6 +30,26 @@ class Screen
       end
    end
   
+   def key_up
+     Ncurses::KEY_UP
+   end
+  
+   def key_down
+     Ncurses::KEY_DOWN
+   end
+  
+   def key_enter
+     Ncurses::KEY_ENTER
+   end
+   
+   def key_cancel
+     Ncurses::KEY_CANCEL
+   end
+  
+   def key_backspace
+     Ncurses::KEY_BACKSPACE
+   end
+  
    def lines
      Ncurses.LINES
    end
@@ -43,10 +62,29 @@ class Screen
      Ncurses.getch
    end
   
+   def addch(rc)
+     Ncurses.addch(rc)
+   end
+  
+   def ungetch(rc)
+     Ncurses.ungetch(rc)
+   end
+  
+   def move_to_line(linenum)
+     Ncurses.move(linenum,0)
+   end
+  
    def addstrat(line,col,str)
      Ncurses.move(line,col)
      Ncurses.addstr(str)
    end
+  
+   def add_mode(text)
+     Ncurses.move(Ncurses.LINES - 1, 0)
+     Ncurses.clrtoeol
+     Ncurses.move(Ncurses.LINES - 1, Ncurses.COLS - text.length - 2)
+     add_rev(" #{text} ")
+    end
   
    def getch_fl(cursor_char)
      y,x = Ncurses.getcury(@ncurses), Ncurses.getcurx(@ncurses)
@@ -81,7 +119,17 @@ class Screen
      end
   end
   
+  def add_lines(lines,start_line,step=1)
+    line = start_line
+    clear_from_line(start_line)
+    lines.each_with_index do |l,i|
+      addstrat(line+(i*step),0,l)
+    end
+  end
+  
    def bottom_line(line)
+     Ncurses.move(Ncurses.LINES - 1, 0)
+     Ncurses.clrtoeol
      Ncurses.mvaddstr(Ncurses.LINES - 1, 0, line)
    end
   

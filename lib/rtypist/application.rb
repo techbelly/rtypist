@@ -1,8 +1,6 @@
-require 'ncursesw'
 require 'rtypist/screen'
 
 class Rtypist::Application
-
 
   C_COMMENT                 = '#'
   C_ALT_COMMENT             = '!'
@@ -68,18 +66,19 @@ class Rtypist::Application
 
   def display_speed(screen,total_chars,elapsed_time,error_count)
     test_time  = elapsed_time / 60.0
-    if (elapsed_time > 0)
+    
+    if (elapsed_time > 0.01)
       cpm = total_chars / test_time
       adjusted_cpm = (total_chars - (error_count * 5)) / test_time
+    
+      messages = [
+        "Raw speed      = %6.2f wpm" % (cpm / 5.0),
+        "Adjusted speed = %6.2f wpm" % (adjusted_cpm / 5.0),
+        "with %.1f%% errors" % ( 100.0 * error_count / total_chars.to_f)
+      ]
+    
+      screen.results_box(messages)
     end
-    
-    messages = [
-      "Raw speed      = %6.2f wpm" % (cpm / 5.0),
-      "Adjusted speed = %6.2f wpm" % (adjusted_cpm / 5.0),
-      "with %.1f%% errors" % ( 100.0 * error_count / total_chars.to_f)
-    ]
-    
-    screen.results_box(messages)
   end
 
   def do_menu(screen,data,command_data,i)
@@ -98,6 +97,7 @@ class Rtypist::Application
     
     max_width = labels.map { |l| l[1].length }.max
     columns = screen.cols / (max_width + 2)
+    
     while (columns > 1 && num_items / columns <= 3)
       columns = columns - 1
     end
@@ -127,6 +127,7 @@ class Rtypist::Application
 
     screen.clear_from_line(1)
     screen.add_title(title)
+    screen.add_mode("Menu")
     screen.bottom_line("Use arrowed keys to move around, SPACE or RETURN to select and ESCAPE to go back")
     
     ch = nil
@@ -139,7 +140,7 @@ class Rtypist::Application
           
           text_start_y = start_y + j
           text_start_x = (i+1) * spacing + i * max_width
-          text = labels[j][1]
+          text =         labels[idx][1]
           
           screen.write_at(max_width, text_start_y,text_start_x,text,(idx == cur_choice))
         end
@@ -147,39 +148,29 @@ class Rtypist::Application
       ch = screen.getch
 
       case ch
-      when Ncurses::KEY_UP,'k'.ord,'K'.ord
+      when screen.key_up,'k'.ord,'K'.ord
         cur_choice = [0, cur_choice -1].max;
         if (cur_choice < start_idx) 
           start_idx = start_idx - 1
           end_idx = end_idx -1
         end
-      when Ncurses::KEY_DOWN,'j'.ord,'J'.ord
+      when screen.key_down,'j'.ord,'J'.ord
         cur_choice = [cur_choice +1, num_items -1].min
         if (cur_choice > end_idx)
           start_idx = start_idx + 1
           end_idx = end_idx + 1
         end
-      when "\n".ord, " ".ord, Ncurses::KEY_ENTER
+      when "\n".ord, " ".ord, screen.key_enter
         return labels[cur_choice][0] 
-      when Ncurses::KEY_CANCEL,C_ESC_KEY,'q'.ord, 'Q'.ord
+      when screen.key_cancel,C_ESC_KEY,'q'.ord, 'Q'.ord
         return up_label
-      else
-        puts ch
       end
     end while true 
   end
 
-  def add_lines(screen,lines,start_line)
-    line = start_line
-    screen.clear_from_line(start_line)
-    lines.each_with_index do |l,i|
-      screen.addstrat(line+i,0,l)
-    end
-  end
-
   def do_tutorial(screen,data,command_data,line_num)
     lines = command_data.split("\n").map {|l| l[2..-1]}
-    add_lines(screen,lines,1)
+    screen.add_lines(lines,1)
     screen.getch
   end
 
@@ -187,17 +178,13 @@ class Rtypist::Application
     line2 = command_data.split('\n')[0]
     lines = [data]
     lines = lines + line2[2..-1] if line2
-    add_lines(screen,lines,1)
+    screen.add_lines(lines,1)
   end
 
   def do_query_repeat(screen)
-    Ncurses.move(Ncurses.LINES - 1, 0)
-    Ncurses.clrtoeol
-    Ncurses.move(Ncurses.LINES - 1, Ncurses.COLS - "Query".length - 2)
-    screen.add_rev("Query")
-    Ncurses.move(Ncurses.LINES - 1, 0)
-    screen.add_rev(" Press R to repeat, N for next exercise or E to exit")
-    while (true)
+    begin 
+      screen.add_mode("Query")
+      screen.bottom_line(" Press R to repeat, N for next exercise or E to exit")
       ch = screen.getch_fl(0).chr
       case ch
         when 'R','r'
@@ -207,36 +194,29 @@ class Rtypist::Application
         when 'E','e'
           break
       end
-      Ncurses.move(Ncurses.LINES - 1, 0); Ncurses.clrtoeol
-      Ncurses.move(Ncurses.LINES - 1, Ncurses.COLS - "Query".length - 2)
-      screen.add_rev("Query")
-      Ncurses.move(Ncurses.LINES - 1, 0)
-      screen.add_rev(" Press R to repeat, N for next exercise or E to exit")
-    end
-    Ncurses.move(Ncurses.LINES - 1, 0); Ncurses.clrtoeol
+    end while(true)
+    screen.bottom_line("")
     return ch
   end
 
   def do_drill(screen, data, command_data,i)
     drill_data = [data]+command_data
+    
     if (@last_command == C_TUTORIAL)
-      Ncurses.move(1,0); Ncurses.clrtobot
+      screen.clear_from_line(1)
     end
+    
     all_data = drill_data.join("\n")
     pos = 0
+    first_line_line = 4
     while (true)
-      linenum = 4
-      Ncurses.move(linenum,0); Ncurses.clrtobot
-      drill_data.each do |line|
-        Ncurses.addstr(line)
-        linenum += 2
-        Ncurses.move(linenum,0)
-      end
-      Ncurses.move(Ncurses.LINES - 1 , Ncurses.COLS - "Drill".length - 2)
-      screen.add_rev("Drill")
-      linenum = 4+1
-     
-      Ncurses.move(linenum,0)
+      linenum = first_line_line
+      screen.clear_from_line(linenum)
+      screen.add_lines(drill_data,linenum,2)
+      screen.add_mode("Drill")
+      
+      linenum = first_line_line+1
+      screen.move_to_line(linenum)
 
       start_time = nil
       chars_typed = 0
@@ -247,39 +227,41 @@ class Rtypist::Application
       while position < all_data.length
         begin
           rc = screen.getch_fl(" ".ord)
-        end while (rc == Ncurses::KEY_BACKSPACE)
+        end while (rc == screen.key_backspace)
 
         if (chars_typed == 0)
           start_time = Time.new
         end
 
         chars_typed += 1
-        error_sync -= 1
+        error_sync  -= 1
 
         break if rc == C_ESC_KEY 
 
         if rc == all_data[position].ord
-          Ncurses.addch(rc)
+          screen.addch(rc)
           chars_typed_in_line += 1
         else
           if error_sync >= 0 && rc == all_data[position-1].ord
             next
-          elsif chars_typed_in_line < Ncurses.COLS
+          elsif chars_typed_in_line < screen.cols
             screen.add_rev('^')
             chars_typed_in_line += 1
           end
           errors += 1
           error_sync = 1
           if rc == all_data[position+1]
-            Ncurses.ungetch(rc)
+            screen.ungetch(rc)
             error_sync += 1
           end
         end
+        
         if (all_data[position] == "\n")
           linenum += 2
-          Ncurses.move linenum, 0
+          screen.move_to_line linenum
           chars_typed_in_line = 0
         end
+        
         position = position + 1
       end
       if (rc == C_ESC_KEY) 
