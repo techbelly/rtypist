@@ -78,6 +78,27 @@ class Rtypist::Application
     end
   end
 
+  def display_speed(total_chars,elapsed_time,error_count)
+    test_time  = elapsed_time / 60.0
+    if (elapsed_time > 0)
+      cpm = total_chars / test_time
+      adjusted_cpm = (total_chars - (error_count * 5)) / test_time
+    end
+    line = Ncurses.LINES - 5
+    message = " Raw speed      = %6.2f wpm " % (cpm / 5.0)
+    Ncurses.move(line,Ncurses.COLS - message.length - 1)
+    add_rev(message)
+    line += 1
+    message = " Adjusted speed = %6.2f wpm " % (adjusted_cpm / 5.0)
+    Ncurses.move(line,Ncurses.COLS - message.length - 1)
+    add_rev(message)
+    line += 1
+    message = "            with %.1f%% errors " % ( 100.0 * error_count / total_chars.to_f)
+    Ncurses.move(line,Ncurses.COLS - message.length - 1)
+    add_rev(message)
+    line += 1
+  end
+
   def do_menu(data,command_data,i)
     num_lines = command_data.split("\n").count
     num_items = num_lines - 1;
@@ -299,8 +320,8 @@ class Rtypist::Application
             error_sync += 1
           end
         end
-        if (all_data[position] == "\n".ord)
-          linenum += 2;
+        if (all_data[position] == "\n")
+          linenum += 2
           Ncurses.move linenum, 0
           chars_typed_in_line = 0
         end
@@ -308,6 +329,10 @@ class Rtypist::Application
       end
       if (rc == C_ESC_KEY) 
         next unless chars_typed == 1
+      end
+      if (rc != C_ESC_KEY)
+        end_time = Time.new
+        display_speed(chars_typed, end_time - start_time, errors)
       end
       rc = do_query_repeat
       break if rc == 'E' or rc == 'e' or rc == 'N' or rc == 'n'
@@ -336,6 +361,9 @@ class Rtypist::Application
           command_data = buffer_data(file,i)
           do_instruction(data,command_data,i)
         when C_DRILL
+          command_data = buffer_data(file,i).split("\n").map {|s| s[2..-1] }
+          do_drill(data,command_data,i)
+         when C_SPEEDTEST
           command_data = buffer_data(file,i).split("\n").map {|s| s[2..-1] }
           do_drill(data,command_data,i)
         when C_CONT
