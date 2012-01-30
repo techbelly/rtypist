@@ -24,6 +24,13 @@ class Screen
         Ncurses.curs_set 0
         Ncurses.keypad(Ncurses.stdscr,true)         
         Ncurses.raw
+          Ncurses.start_color
+          Ncurses.init_pair(C_NORMAL, Ncurses::COLOR_WHITE, Ncurses::COLOR_BLACK);
+          Ncurses.init_pair(C_BANNER, Ncurses::COLOR_CYAN, Ncurses::COLOR_BLACK);
+          Ncurses.init_pair(C_PROG_NAME, Ncurses::COLOR_CYAN, Ncurses::COLOR_BLACK);
+          Ncurses.init_pair(C_PROG_VERSION, Ncurses::COLOR_CYAN, Ncurses::COLOR_RED);
+          Ncurses.init_pair(C_MENU_TITLE, Ncurses::COLOR_WHITE, Ncurses::COLOR_BLACK);
+
         yield self
         Ncurses.getch
       ensure
@@ -148,11 +155,11 @@ class Screen
      Ncurses.clrtobot
    end
   
-   def banner(text,brand = "rtypist #{Rtypist::VERSION}")
+   def banner(text,brand = "rtypist", version =  Rtypist::VERSION)
      text = text.strip
      brand = " #{brand} "
      cols = Ncurses.COLS
-     brand_pos = cols - brand.length
+     brand_pos = cols - brand.length - version.length - 4
      text_pos = ((cols-brand.length) > text.length) ? (cols - brand.length - text.length) / 2 : 0
      Ncurses.move(0, 0)
      Ncurses.attron(Ncurses.COLOR_PAIR(C_BANNER))    
@@ -161,7 +168,9 @@ class Screen
      add_rev(text)
      Ncurses.move(TOP, brand_pos)
      Ncurses.attron(Ncurses.COLOR_PAIR(C_PROG_NAME));
-     add_rev(brand);
+     add_rev(" #{brand} ");
+     Ncurses.attron(Ncurses.COLOR_PAIR(C_PROG_VERSION));
+     add_rev(" #{version} ");
      Ncurses.refresh();
      Ncurses.attron(Ncurses.COLOR_PAIR(C_NORMAL));
    end
